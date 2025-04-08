@@ -16,8 +16,8 @@ class Trader:
                 continue
             order_depth: OrderDepth = state.order_depths[product]
             orders: List[Order] = []
-            buy_price = 9998 
-            sell_price = 10002
+            buy_price = 9999
+            sell_price = 10001
     
             if len(order_depth.sell_orders) != 0:
                 best_ask, best_ask_amount = list(order_depth.sell_orders.items())[0]

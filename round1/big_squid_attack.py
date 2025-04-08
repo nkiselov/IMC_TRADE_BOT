@@ -40,6 +40,8 @@ class Trader:
 
         # Process each product in the order depths.
         for product in state.order_depths.keys():
+            if product != "SQUID_INK":
+                continue
             order_depth: OrderDepth = state.order_depths[product]
             orders: List[Order] = []
 
