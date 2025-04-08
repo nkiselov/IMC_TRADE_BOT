@@ -27,8 +27,8 @@ def getEntryOrderDepth(ent):
         ret.sell_orders[ent['ask_price_3']] = -ent['ask_volume_3']
     return ret
 
-def readMarketHistory(inp):
-    sample_market = inp
+def readMarketHistory(url):
+    sample_market = url
     entries = []
     with open(sample_market, 'r') as file:
         csvreader = csv.reader(file,delimiter=';')
@@ -53,10 +53,12 @@ def readMarketHistory(inp):
         
 class Simulator:
 
-    def __init__(self,url):
-        market, products = readMarketHistory(url)
-        self.market = market
-        self.products = products
+    def __init__(self,urls):
+        self.market = []
+        for url in urls:
+            marketCur, productCur = readMarketHistory(url)
+            self.products = productCur
+            self.market+=marketCur
 
     def runSimul(self,algo,vis):
         market = self.market
@@ -72,6 +74,8 @@ class Simulator:
         profit = 0
 
         for itern in range(len(market)):
+            if itern%1000==0:
+                print(itern)
             cur_orig = market[itern]
             algoOrders, conversions, newTraderData = algo.run(TradingState(traderData=traderData,order_depths=cur_orig,position=positions,timestamp=100*itern,listings=None,own_trades=None,market_trades=None,observations=None))
             traderData = newTraderData

@@ -19,7 +19,7 @@ class Trader:
         current_tick = data["tick"]
 
         for product in state.order_depths:
-            if product != "SQUID_INK":
+            if product != "KELP":
                 continue
 
             order_depth: OrderDepth = state.order_depths[product]
@@ -41,8 +41,8 @@ class Trader:
             data["prices"].setdefault(product, []).append(mid_price)
 
             # Define SMA windows
-            short_window = 7
-            long_window = 21
+            short_window = 4
+            long_window = 20
             price_history = data["prices"][product]
 
             if len(price_history) >= long_window + 1:
@@ -57,7 +57,7 @@ class Trader:
                     if sma_short_prev <= sma_long_prev and sma_short > sma_long:
                         if order_depth.sell_orders:
                             best_ask = min(order_depth.sell_orders.keys())
-                            quantity = min(10, order_depth.sell_orders[best_ask])  # Limit size
+                            quantity = min(10, -order_depth.sell_orders[best_ask])  # Limit size
                             orders.append(Order(product, best_ask, quantity))
                             data["positions"][product] = {"entry_tick": current_tick}
 
