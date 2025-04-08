@@ -1,4 +1,4 @@
-from trading import Trader
+from resin import Trader
 import csv
 from datamodel import OrderDepth, UserId, TradingState, Order
 import copy
