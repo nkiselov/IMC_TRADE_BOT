@@ -30,7 +30,6 @@ class Trader:
                     orders.append(Order(product, best_bid, -best_bid_amount))
             
             result[product] = orders
-            print(jsonpickle.encode(state.observations))
     
         traderData = "SAMPLE"
 
