@@ -1,6 +1,7 @@
 from datamodel import OrderDepth, UserId, TradingState, Order
 from typing import List
 import string
+import jsonpickle
 
 # Trading State has
 #   position
@@ -9,36 +10,29 @@ import string
 
 class Trader:
     def run(self, state: TradingState):
-        # Only method required. It takes all buy and sell orders for all symbols as an input, and outputs a list of orders to be sent
-        # print("traderData: " + state.traderData)
-        # print("Observations: " + str(state.observations))
         result = {}
         for product in state.order_depths:
-            if(product=="RAINFOREST_RESIN"):
+            if(product!="RAINFOREST_RESIN"):
                 continue
             order_depth: OrderDepth = state.order_depths[product]
             orders: List[Order] = []
-            buy_price = 2015.5;  # Participant should calculate this value
-            sell_price = 2019;
-            # print("Acceptable price : " + str(acceptable_price))
-            # print("Buy Order depth : " + str(len(order_depth.buy_orders)) + ", Sell order depth : " + str(len(order_depth.sell_orders)))
+            buy_price = 9998 
+            sell_price = 10002
     
             if len(order_depth.sell_orders) != 0:
                 best_ask, best_ask_amount = list(order_depth.sell_orders.items())[0]
                 if int(best_ask) < buy_price:
-                    # print("BUY", str(-best_ask_amount) + "x", best_ask)
                     orders.append(Order(product, best_ask, -best_ask_amount))
     
             if len(order_depth.buy_orders) != 0:
                 best_bid, best_bid_amount = list(order_depth.buy_orders.items())[0]
                 if int(best_bid) > sell_price:
-                    # print("SELL", str(best_bid_amount) + "x", best_bid)
                     orders.append(Order(product, best_bid, -best_bid_amount))
             
             result[product] = orders
+            print(jsonpickle.encode(state.observations))
     
-    
-        traderData = "SAMPLE" # String value holding Trader state data required. It will be delivered as TradingState.traderData on next execution.
-        
+        traderData = "SAMPLE"
+
         conversions = 1
         return result, conversions, traderData
