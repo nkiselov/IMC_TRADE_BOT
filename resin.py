@@ -11,27 +11,21 @@ import jsonpickle
 class Trader:
     def run(self, state: TradingState):
         result = {}
-        for product in state.order_depths:
-            if(product!="RAINFOREST_RESIN"):
-                continue
-            order_depth: OrderDepth = state.order_depths[product]
-            orders: List[Order] = []
-            buy_price = 9999
-            sell_price = 10001
-    
-            if len(order_depth.sell_orders) != 0:
-                best_ask, best_ask_amount = list(order_depth.sell_orders.items())[0]
-                if int(best_ask) < buy_price:
-                    orders.append(Order(product, best_ask, -best_ask_amount))
-    
-            if len(order_depth.buy_orders) != 0:
-                best_bid, best_bid_amount = list(order_depth.buy_orders.items())[0]
-                if int(best_bid) > sell_price:
-                    orders.append(Order(product, best_bid, -best_bid_amount))
-            
-            result[product] = orders
-    
-        traderData = "SAMPLE"
+        theGood = "RAINFOREST_RESIN"
+
+        buy_price = 9998
+        sell_price = 10002
+        print(state.position)
+        orders: List[Order] = []
+        pos = 0
+        if theGood in state.position:
+            pos = state.position[theGood]
+        orders.append(Order(theGood, buy_price, 50-pos))
+        orders.append(Order(theGood, sell_price, -50-pos))
+        
+        result[theGood] = orders
+
+        traderData = ""
 
         conversions = 1
         return result, conversions, traderData
