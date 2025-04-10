@@ -12,33 +12,33 @@ import numpy as np
 class Trader:
     def run(self, state: TradingState):
         result = {}
-        theGood = "KELP"
+        theGood = "SQUID_INK"
 
-        mrMarginBuy = 1
-        mrMarginSell = 1
-        msWindow = 30
-        #10 351
-        #30 323
         
+        bigWindow = 100
+        smallWindow = 50
         mid_price = (max(state.order_depths[theGood].buy_orders)+min(state.order_depths[theGood].sell_orders))/2
         price_history = []
         if(state.traderData!=""):
             price_history = jsonpickle.decode(state.traderData)
         price_history+=[mid_price]
 
-        if(len(price_history)>msWindow):
+        if(len(price_history)>bigWindow):
             price_history = price_history[1:]
-        avePrice = np.mean(price_history)
-
+        smlAve = np.mean(price_history[max(0,len(price_history)-smallWindow):])
+        bigAve = np.mean(price_history[max(0,len(price_history)-bigWindow):])
+        conf = int(0.5*abs(smlAve-bigAve))
         orders: List[Order] = []
         pos = 0
         if theGood in state.position:
             pos = state.position[theGood]
-        amtBuy = 50-pos
-        amtSell = pos+50
+        amtBuy = min((50-pos),conf)
+        amtSell = min((pos+50),conf)
 
-        orders.append(Order(theGood, int(avePrice-mrMarginBuy), amtBuy))
-        orders.append(Order(theGood, int(avePrice+mrMarginSell), -amtSell))
+        if smlAve<bigAve:
+            orders.append(Order(theGood, int(smlAve), amtBuy))
+        else:
+            orders.append(Order(theGood, int(smlAve), -amtSell))
         
         result[theGood] = orders
 
