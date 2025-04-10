@@ -1,0 +1,151 @@
+import json
+import statistics
+from typing import Dict, List, Tuple
+from datamodel import OrderDepth, TradingState, Order
+
+
+class Trader:
+    def run(self, state: TradingState) -> Tuple[Dict[str, List[Order]], int, str]:
+        """
+        Executes the trading strategy on every tick.
+        Uses an SMA plus dynamic Bollinger bands (with band widths adjusted by volatility)
+        to generate mean-reversion trading signals.
+        - Enters a short position (sell) when the mid-price is above the dynamic upper band.
+        - Enters a long position (buy) when the mid-price is below the dynamic lower band.
+        - Exits the position when the price reverts toward the SMA or after 30 ticks.
+        
+        Returns:
+          - result: A dictionary mapping each product to a list of orders.
+          - conversions: An integer conversion (here set to 1).
+          - traderData: A persistent JSON string that stores state between ticks.
+        """
+        result = {}
+
+        # Load persistent state from traderData or initialize state if none exists.
+        try:
+            data = json.loads(state.traderData) if state.traderData else {}
+        except Exception:
+            data = {}
+
+        if not data:
+            data = {"prices": {}, "positions": {}, "tick": 0}
+        else:
+            if "prices" not in data:
+                data["prices"] = {}
+            if "positions" not in data:
+                data["positions"] = {}
+            if "tick" not in data:
+                data["tick"] = 0
+
+        # Increment global tick count.
+        data["tick"] += 1
+        current_tick = data["tick"]
+
+        # Strategy parameters
+        sma_window = 7      # Window to compute the SMA and current volatility.
+        vol_window = 21     # Window to compute the moving average volatility.
+        baseline_multiplier = 2.0  # Base multiplier for band width.
+        hold_limit = 30     # Maximum ticks to hold a position.
+
+        # Process each product in the order depths.
+        for product in state.order_depths.keys():
+            order_depth: OrderDepth = state.order_depths[product]
+            orders: List[Order] = []
+
+            # Compute the mid-price using both sides of the order book if possible.
+            if order_depth.buy_orders and order_depth.sell_orders:
+                best_bid = max(order_depth.buy_orders.keys())
+                best_ask = min(order_depth.sell_orders.keys())
+                mid_price = (best_bid + best_ask) / 2.0
+            elif order_depth.buy_orders:
+                mid_price = max(order_depth.buy_orders.keys())
+            elif order_depth.sell_orders:
+                mid_price = min(order_depth.sell_orders.keys())
+            else:
+                continue  # Skip products with no orders
+
+            # Update price history for the product.
+            if product not in data["prices"]:
+                data["prices"][product] = []
+            data["prices"][product].append(mid_price)
+
+            # Only evaluate if we have enough price history.
+            if len(data["prices"][product]) >= vol_window:
+                # Compute the SMA and local volatility over sma_window.
+                recent_prices = data["prices"][product][-sma_window:]
+                sma = sum(recent_prices) / sma_window
+                current_std = statistics.stdev(recent_prices)
+
+                # Compute longer-term volatility over vol_window.
+                vol_prices = data["prices"][product][-vol_window:]
+                try:
+                    moving_avg_vol = statistics.stdev(vol_prices)
+                except statistics.StatisticsError:
+                    moving_avg_vol = 0
+
+                # Compute a dynamic multiplier.
+                if moving_avg_vol == 0:
+                    dynamic_multiplier = baseline_multiplier
+                else:
+                    dynamic_multiplier = baseline_multiplier * (current_std / moving_avg_vol)
+
+                # Calculate dynamic Bollinger bands.
+                upper_band = sma + dynamic_multiplier * current_std
+                lower_band = sma - dynamic_multiplier * current_std
+
+                # If not already in a position, check for entry signals.
+                if product not in data["positions"]:
+                    # Signal for a short entry (expecting a downward reversion):
+                    if mid_price > upper_band:
+                        if order_depth.buy_orders:
+                            best_bid = max(order_depth.buy_orders.keys())
+                            order_quantity = 10  # Following template convention for a short (sell)
+                            orders.append(Order(product, best_bid, order_quantity))
+                            data["positions"][product] = {"entry_tick": current_tick, "side": "short"}
+                            print(f"SHORT ENTRY: Sell {order_quantity}x {product} at {best_bid} (Price above upper band)")
+                    # Signal for a long entry (expecting an upward reversion):
+                    elif mid_price < lower_band:
+                        if order_depth.sell_orders:
+                            best_ask = min(order_depth.sell_orders.keys())
+                            order_quantity = -10  # Following template convention for a long (buy)
+                            orders.append(Order(product, best_ask, order_quantity))
+                            data["positions"][product] = {"entry_tick": current_tick, "side": "long"}
+                            print(f"LONG ENTRY: Buy {abs(order_quantity)}x {product} at {best_ask} (Price below lower band)")
+
+                else:
+                    # Already in a position; check exit conditions.
+                    pos = data["positions"][product]
+                    time_in_position = current_tick - pos["entry_tick"]
+                    exit_signal = False
+
+                    if pos["side"] == "short":
+                        # For a short position, exit when price falls to or below the SMA or when holding too long.
+                        if mid_price <= sma or time_in_position >= hold_limit:
+                            exit_signal = True
+                        if exit_signal and order_depth.sell_orders:
+                            # To cover a short, buy at the best ask.
+                            best_ask = min(order_depth.sell_orders.keys())
+                            order_quantity = -10  # Using the negative sign per template convention.
+                            orders.append(Order(product, best_ask, order_quantity))
+                            print(f"EXIT SHORT: Buy {abs(order_quantity)}x {product} at {best_ask} (Exit condition met)")
+                            del data["positions"][product]
+
+                    elif pos["side"] == "long":
+                        # For a long position, exit when price rises to or above the SMA or when holding too long.
+                        if mid_price >= sma or time_in_position >= hold_limit:
+                            exit_signal = True
+                        if exit_signal and order_depth.buy_orders:
+                            # To exit a long, sell at the best bid.
+                            best_bid = max(order_depth.buy_orders.keys())
+                            order_quantity = 10
+                            orders.append(Order(product, best_bid, order_quantity))
+                            print(f"EXIT LONG: Sell {order_quantity}x {product} at {best_bid} (Exit condition met)")
+                            del data["positions"][product]
+
+            result[product] = orders
+
+        # Store the updated state.
+        traderData = json.dumps(data)
+        conversions = 1
+
+        return result, conversions, traderData
